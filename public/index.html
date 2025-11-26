@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>City Life Monitor - Group 18</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+        .card { border: 1px solid #ddd; padding: 1rem; margin-top: 1rem; border-radius: 8px; }
+        .hidden { display: none; }
+        button { cursor: pointer; padding: 8px 16px; background: #007bff; color: white; border: none; }
+    </style>
+</head>
+<body>
+    <h1>City Life Monitor 🏙️</h1>
+    
+    <div id="auth-section">
+        <a href="/auth/google"><button>Login with Google</button></a>
+    </div>
+    <div id="user-section" class="hidden">
+        <p>Welcome, <span id="username"></span>!</p>
+    </div>
+
+    <hr>
+
+    <div>
+        <input type="text" id="cityInput" placeholder="Enter City Name (e.g., London)" />
+        <button onclick="fetchCityData()">Analyze City</button>
+    </div>
+
+    <div id="results" class="hidden">
+        <h2>Aggregated Data</h2>
+        <pre id="jsonDisplay" style="background: #f4f4f4; padding: 10px;"></pre>
+        <button onclick="sendToBackend()">Save to Database</button>
+        <p id="statusMsg"></p>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
