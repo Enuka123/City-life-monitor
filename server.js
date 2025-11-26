@@ -47,7 +47,36 @@ const checkApiKey = (req, res, next) => {
   }
 };
 
-// --- 5. PROXY ROUTE FOR OPEN-METEO (Replaces OpenAQ) ---
+// --- 5. PROXY ROUTE FOR OPENWEATHERMAP (Weather - Key is hidden) ---
+const WEATHER_API_URL = 'https://api.openweathermap.org/data/2.5/weather';
+
+app.get('/api/weather-proxy', async (req, res) => {
+    const { city } = req.query;
+
+    if (!city) {
+        return res.status(400).json({ error: 'City name is required.' });
+    }
+
+    // Uses the new, secure key from .env
+    const url = `${WEATHER_API_URL}?q=${city}&appid=${process.env.WEATHER_API_KEY}&units=metric`;
+
+    try {
+        const weatherRes = await fetch(url);
+        
+        if (!weatherRes.ok) {
+            return res.status(weatherRes.status).json({ error: 'Failed to fetch Weather data' });
+        }
+        
+        const weatherData = await weatherRes.json();
+        res.json(weatherData);
+    } catch (error) {
+        console.error('Weather Proxy fetch error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+
+// --- 6. PROXY ROUTE FOR OPEN-METEO (Air Quality) ---
 const AIR_QUALITY_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 
 app.get('/api/openaq-proxy', async (req, res) => {
@@ -57,7 +86,6 @@ app.get('/api/openaq-proxy', async (req, res) => {
         return res.status(400).json({ error: 'Latitude and Longitude are required.' });
     }
 
-    // Requesting US AQI and PM2.5 from Open-Meteo
     const url = `${AIR_QUALITY_URL}?latitude=${lat}&longitude=${lon}&current=us_aqi,pm2_5`;
 
     try {
@@ -71,12 +99,47 @@ app.get('/api/openaq-proxy', async (req, res) => {
         const aqData = await aqRes.json();
         res.json(aqData);
     } catch (error) {
-        console.error('Proxy fetch error:', error);
+        console.error('AQ Proxy fetch error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
-// --- 6. AUTH ROUTES ---
+// --- 7. PROXY ROUTE FOR GEODB CITIES (Demographics) ---
+const GEODB_API_URL = 'https://wft-geo-db.p.rapidapi.com/v1/geo/cities';
+
+app.get('/api/geodb-proxy', async (req, res) => {
+    const { city, countryCode } = req.query;
+
+    if (!city || !countryCode) {
+        return res.status(400).json({ error: 'City and Country Code are required.' });
+    }
+
+    const url = `${GEODB_API_URL}?namePrefix=${city}&countryIds=${countryCode}&limit=1`;
+
+    try {
+        const geoDbRes = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'X-RapidAPI-Key': process.env.GEODB_API_KEY, 
+                'X-RapidAPI-Host': 'wft-geo-db.p.rapidapi.com'
+            }
+        });
+
+        if (!geoDbRes.ok) {
+            console.error(`GeoDB request failed: ${geoDbRes.status}`);
+            return res.status(geoDbRes.status).json({ error: 'Failed to fetch GeoDB data' });
+        }
+
+        const geoDbData = await geoDbRes.json();
+        res.json(geoDbData);
+    } catch (error) {
+        console.error('GeoDB Proxy fetch error:', error);
+        res.status(500).json({ error: 'Internal server error while fetching GeoDB data.' });
+    }
+});
+
+
+// --- 8. AUTH & DATA ROUTES ---
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile'] }));
 app.get('/auth/google/callback', 
   passport.authenticate('google', { failureRedirect: '/' }),
@@ -87,7 +150,7 @@ app.get('/current-user', (req, res) => {
   res.json(req.user || null);
 });
 
-// --- 7. DATA SAVING ROUTE ---
+// Data Ingestion Endpoint
 app.post('/api/save-city-data', checkApiKey, async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Unauthorized: Please login' });
 

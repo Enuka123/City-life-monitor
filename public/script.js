@@ -1,11 +1,12 @@
-// Ensure this matches the key in your .env file
-const WEATHER_API_KEY = '2d679f5fe88a7473fdae4ca8d2de2611'; 
+// --- CONFIGURATION ---
+// APP_API_KEY is the only external key defined here, for application auth
 // Ensure this matches the APP_API_KEY in your .env file
-const APP_API_KEY = 'MyStrongSecretKey_SoC_2025_Group18';
+const APP_API_KEY = 'MyStrongSecretKey_SoC_2025_Group18'; 
+// -----------------------
 
 let aggregatedData = {};
 
-// Check if user is logged in
+// --- AUTHENTICATION CHECK ---
 fetch('/current-user')
     .then(res => res.json())
     .then(user => {
@@ -16,31 +17,43 @@ fetch('/current-user')
         }
     });
 
+// --- DATA FETCHING & AGGREGATION LOGIC (MINI PROJECT CORE) ---
 async function fetchCityData() {
     const city = document.getElementById('cityInput').value;
     if (!city) return alert("Please enter a city");
 
     try {
-        // 1. Fetch Weather
-        const weatherRes = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${WEATHER_API_KEY}&units=metric`);
+        // 1. Fetch Weather (VIA BACKEND PROXY - Key is hidden in .env)
+        // **CRITICAL CHANGE**: Calling the local proxy, NOT the external API
+        const weatherRes = await fetch(`/api/weather-proxy?city=${city}`);
         
-        if (!weatherRes.ok) throw new Error("Weather city not found");
+        if (!weatherRes.ok) throw new Error("Weather city not found or data is unavailable.");
         const weatherData = await weatherRes.json();
-
-        // 2. Fetch Air Quality (VIA YOUR LOCAL PROXY)
+        
         const { lat, lon } = weatherData.coord;
-        
-        // Calling our local server, which now talks to Open-Meteo
+        const countryCode = weatherData.sys.country; 
+
+        // 2. Fetch Air Quality (Open-Meteo via Backend Proxy)
         const aqRes = await fetch(`/api/openaq-proxy?lat=${lat}&lon=${lon}`);
-        
         let aqData = {};
         if (aqRes.ok) {
             aqData = await aqRes.json();
         } else {
-            console.warn("Air Quality data unavailable");
+            console.warn("Air Quality data unavailable from proxy.");
         }
         
-        // 3. Aggregate Data
+        // 3. Fetch Demographics (GeoDB via Backend Proxy)
+        const geoDbRes = await fetch(`/api/geodb-proxy?city=${city}&countryCode=${countryCode}`);
+        let geoDbData = {};
+        if (geoDbRes.ok) {
+            geoDbData = await geoDbRes.json();
+        } else {
+            console.warn("Demographics data unavailable from GeoDB proxy.");
+        }
+        
+        // 4. AGGREGATION: Combine all data into the required single JSON object
+        const cityDetail = geoDbData.data?.[0] || {};
+
         aggregatedData = {
             cityName: weatherData.name,
             country: weatherData.sys.country,
@@ -50,13 +63,12 @@ async function fetchCityData() {
                 condition: weatherData.weather[0].description
             },
             airQuality: {
-                // Open-Meteo Format: current.us_aqi
                 aqi: aqData.current?.us_aqi || 0, 
                 pollutant: 'PM2.5: ' + (aqData.current?.pm2_5 || 'N/A')
             },
             demographics: {
-                population: 'N/A', 
-                elevation: 'N/A'
+                population: cityDetail.population?.toLocaleString() || 'N/A', 
+                elevation: cityDetail.elevationMeters ? `${cityDetail.elevationMeters}m` : 'N/A'
             }
         };
 
@@ -66,12 +78,22 @@ async function fetchCityData() {
 
     } catch (error) {
         console.error("Error fetching data:", error);
-        alert("Failed to fetch city data. Check console.");
+        alert(`Failed to fetch city data: ${error.message || 'Check console for details.'}`);
     }
 }
 
+// --- AJAX TRANSMISSION ---
 async function sendToBackend() {
-    // Ajax request to our own backend
+    // Check if the user is authenticated first
+    const userRes = await fetch('/current-user');
+    const user = await userRes.json();
+
+    if (!user) {
+        document.getElementById('statusMsg').innerText = "Please log in first using Google OAuth.";
+        return;
+    }
+    
+    // AJAX request to our own backend, using the custom API Key header
     const response = await fetch('/api/save-city-data', {
         method: 'POST',
         headers: {
