@@ -16,7 +16,7 @@ const CityDataSchema = new mongoose.Schema({
   demographics: {
     // Changed from Number to String so they can accept "N/A"
     population: String, 
-    elevation: String
+    //elevation: String
   },
   user: String // Stores which user saved this data (OAuth)
 });

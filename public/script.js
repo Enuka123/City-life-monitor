@@ -1,10 +1,9 @@
 // --- CONFIGURATION ---
-// APP_API_KEY is the only external key defined here, for application auth
-// Ensure this matches the APP_API_KEY in your .env file
 const APP_API_KEY = 'MyStrongSecretKey_SoC_2025_Group18'; 
 // -----------------------
 
 let aggregatedData = {};
+let myChart = null; // Store chart instance
 
 // --- AUTHENTICATION CHECK ---
 fetch('/current-user')
@@ -17,50 +16,47 @@ fetch('/current-user')
         }
     });
 
-// --- DATA FETCHING & AGGREGATION LOGIC (MINI PROJECT CORE) ---
+// --- DATA FETCHING ---
 async function fetchCityData() {
-    const city = document.getElementById('cityInput').value;
+    const cityInput = document.getElementById('cityInput');
+    const city = cityInput.value;
     if (!city) return alert("Please enter a city");
 
+    // UI Reset
+    document.getElementById('statusMsg').innerText = ''; 
+    document.getElementById('results').classList.add('hidden');
+    document.getElementById('chart-section').classList.add('hidden'); // Hide chart on new search
+
     try {
-        // 1. Fetch Weather (VIA BACKEND PROXY - Key is hidden in .env)
-        // **CRITICAL CHANGE**: Calling the local proxy, NOT the external API
+        // 1. Weather
         const weatherRes = await fetch(`/api/weather-proxy?city=${city}`);
-        
-        if (!weatherRes.ok) throw new Error("Weather city not found or data is unavailable.");
+        if (!weatherRes.ok) throw new Error("Weather city not found.");
         const weatherData = await weatherRes.json();
         
         const { lat, lon } = weatherData.coord;
         const countryCode = weatherData.sys.country; 
 
-        // 2. Fetch Air Quality (Open-Meteo via Backend Proxy)
+        // 2. Air Quality
         const aqRes = await fetch(`/api/openaq-proxy?lat=${lat}&lon=${lon}`);
         let aqData = {};
-        if (aqRes.ok) {
-            aqData = await aqRes.json();
-        } else {
-            console.warn("Air Quality data unavailable from proxy.");
-        }
+        if (aqRes.ok) aqData = await aqRes.json();
         
-        // 3. Fetch Demographics (GeoDB via Backend Proxy)
+        // 3. Demographics
         const geoDbRes = await fetch(`/api/geodb-proxy?city=${city}&countryCode=${countryCode}`);
         let geoDbData = {};
-        if (geoDbRes.ok) {
-            geoDbData = await geoDbRes.json();
-        } else {
-            console.warn("Demographics data unavailable from GeoDB proxy.");
-        }
+        if (geoDbRes.ok) geoDbData = await geoDbRes.json();
         
-        // 4. AGGREGATION: Combine all data into the required single JSON object
+        // 4. Aggregation
         const cityDetail = geoDbData.data?.[0] || {};
 
         aggregatedData = {
-            cityName: weatherData.name,
+            cityName: weatherData.name, 
             country: weatherData.sys.country,
             weather: {
-                temp: weatherData.main.temp,
+                temp: Math.round(weatherData.main.temp),
                 humidity: weatherData.main.humidity,
-                condition: weatherData.weather[0].description
+                condition: weatherData.weather[0].description,
+                main: weatherData.weather[0].main 
             },
             airQuality: {
                 aqi: aqData.current?.us_aqi || 0, 
@@ -72,28 +68,45 @@ async function fetchCityData() {
             }
         };
 
-        // Display on Frontend
+        // --- UI UPDATE ---
+        document.getElementById('ui-city').innerText = aggregatedData.cityName;
+        const countryEl = document.getElementById('ui-country');
+        if(countryEl) countryEl.innerText = aggregatedData.country;
+        
+        document.getElementById('ui-temp').innerText = aggregatedData.weather.temp;
+        document.getElementById('ui-condition').innerText = aggregatedData.weather.condition; 
+        
+        document.getElementById('ui-humidity').innerText = aggregatedData.weather.humidity;
+        document.getElementById('ui-aqi').innerText = aggregatedData.airQuality.aqi;
+        document.getElementById('ui-pollutant').innerText = aggregatedData.airQuality.pollutant;
+        document.getElementById('ui-population').innerText = aggregatedData.demographics.population;
+        document.getElementById('ui-elevation').innerText = aggregatedData.demographics.elevation;
+
+        if(window.updateBackground) window.updateBackground(aggregatedData.weather.main);
+
         document.getElementById('results').classList.remove('hidden');
         document.getElementById('jsonDisplay').innerText = JSON.stringify(aggregatedData, null, 2);
 
     } catch (error) {
         console.error("Error fetching data:", error);
-        alert(`Failed to fetch city data: ${error.message || 'Check console for details.'}`);
+        alert(`Failed to fetch city data: ${error.message}`);
     }
 }
 
-// --- AJAX TRANSMISSION ---
+// --- SAVE DATA ---
 async function sendToBackend() {
-    // Check if the user is authenticated first
     const userRes = await fetch('/current-user');
     const user = await userRes.json();
 
     if (!user) {
-        document.getElementById('statusMsg').innerText = "Please log in first using Google OAuth.";
+        const msg = document.getElementById('statusMsg');
+        msg.innerText = "Please log in first.";
+        msg.style.color = "#ff6b6b";
         return;
     }
     
-    // AJAX request to our own backend, using the custom API Key header
+    if (Object.keys(aggregatedData).length === 0) return;
+
     const response = await fetch('/api/save-city-data', {
         method: 'POST',
         headers: {
@@ -104,5 +117,92 @@ async function sendToBackend() {
     });
 
     const result = await response.json();
-    document.getElementById('statusMsg').innerText = result.message || result.error;
+    const msg = document.getElementById('statusMsg');
+    msg.innerText = result.message || result.error;
+    msg.style.color = response.ok ? "#4ade80" : "#ff6b6b";
 }
+
+// --- HISTORICAL CHART LOGIC ---
+async function fetchHistory() {
+    const city = aggregatedData.cityName;
+    if (!city) return alert("Please analyze a city first.");
+
+    try {
+        const response = await fetch(`/api/history?city=${city}`);
+        const historyData = await response.json();
+
+        if (historyData.length === 0) {
+            alert("No historical data found for " + city + ". Try saving some data first!");
+            return;
+        }
+
+        renderChart(historyData);
+        document.getElementById('chart-section').classList.remove('hidden');
+        
+        // Scroll to chart smoothly inside the main content area
+        document.querySelector('.main-content').scrollTop = document.querySelector('.main-content').scrollHeight;
+
+    } catch (error) {
+        console.error("History Error:", error);
+        alert("Failed to load history.");
+    }
+}
+
+function renderChart(data) {
+    const ctx = document.getElementById('historyChart').getContext('2d');
+
+    // Prepare labels (time) and data (temp)
+    const labels = data.map(entry => {
+        const date = new Date(entry.timestamp);
+        return date.toLocaleDateString(undefined, {month:'short', day:'numeric'}) + ' ' + date.getHours() + ':' + String(date.getMinutes()).padStart(2, '0');
+    });
+    
+    const temperatures = data.map(entry => entry.weather.temp);
+
+    // Destroy previous chart instance if it exists
+    if (myChart) myChart.destroy();
+
+    // Create new Histogram (Bar Chart) - Dark Theme Styles
+    myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Temperature (°C)',
+                data: temperatures,
+                backgroundColor: 'rgba(74, 144, 226, 0.6)', // Accent Blue
+                borderColor: 'rgba(74, 144, 226, 1)',
+                borderWidth: 1,
+                barThickness: 20
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#ffffff' } } // White legend
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    ticks: { color: '#a0a0a0' },
+                    title: { display: true, text: 'Temp (°C)', color: '#a0a0a0' }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#a0a0a0' }
+                }
+            }
+        }
+    });
+}
+
+// --- INITIALIZATION ---
+document.addEventListener('DOMContentLoaded', () => {
+    const cityInput = document.getElementById('cityInput');
+    if (cityInput) {
+        cityInput.value = "Colombo";
+        fetchCityData();
+    }
+});

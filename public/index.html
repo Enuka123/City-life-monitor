@@ -2,38 +2,224 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>City Life Monitor - Group 18</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>City Life Monitor | WeatherWise Style</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-        .card { border: 1px solid #ddd; padding: 1rem; margin-top: 1rem; border-radius: 8px; }
-        .hidden { display: none; }
-        button { cursor: pointer; padding: 8px 16px; background: #007bff; color: white; border: none; }
+        :root {
+            --bg-gradient: linear-gradient(135deg, #1e2024 0%, #0d0e12 100%);
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden; /* Prevent body scroll */
+        }
+
+        .bg-image {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url('https://images.unsplash.com/photo-1534088568595-a066f410bcda?q=80&w=2551&auto=format&fit=crop');
+            background-size: cover; background-position: center; z-index: -2;
+            opacity: 0.6; filter: blur(8px); transition: background-image 0.5s ease-in-out;
+        }
+        
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: -1;
+        }
+
+        .dashboard-container {
+            width: 95%; max-width: 1200px; /* Slightly wider */
+            height: 85vh; /* Fixed height relative to viewport */
+            max-height: 750px; /* Cap the height */
+            background: rgba(20, 20, 20, 0.6);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border); border-radius: 30px;
+            box-shadow: var(--card-shadow);
+            display: grid; grid-template-columns: 320px 1fr; /* Fixed sidebar width */
+            overflow: hidden; /* Hide overflow on the main container */
+        }
+
+        /* SIDEBAR */
+        .sidebar { 
+            display: flex; flex-direction: column; gap: 20px; 
+            border-right: 1px solid var(--glass-border); 
+            padding: 30px; 
+            height: 100%;
+        }
+        .app-title { font-size: 1.4rem; font-weight: 700; margin-bottom: 5px; background: linear-gradient(to right, #fff, #aaa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .user-welcome { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 10px; }
+
+        .search-box { position: relative; }
+        .search-box input { width: 100%; background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 12px 15px 12px 40px; border-radius: 12px; color: white; font-size: 0.9rem; outline: none; transition: 0.3s; }
+        .search-box input:focus { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.3); }
+        .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); opacity: 0.6; }
+
+        .btn { background: var(--text-primary); color: black; border: none; padding: 10px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: 0.3s; width: 100%; margin-top: 8px; font-size: 0.9rem;}
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255,255,255,0.1); }
+        .btn-secondary { background: var(--glass-bg); color: white; border: 1px solid var(--glass-border); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+
+        .location-preview { margin-top: auto; background: var(--glass-bg); border-radius: 20px; padding: 20px; text-align: center; }
+        .mini-map-icon { font-size: 2.5rem; margin-bottom: 5px; display: block; opacity: 0.8; }
+
+        /* MAIN CONTENT */
+        .main-content { 
+            display: flex; flex-direction: column; 
+            padding: 30px 40px; /* Reduced padding */
+            height: 100%;
+            overflow-y: auto; /* Allow scrolling ONLY if absolutely necessary, but hidden normally */
+            scrollbar-width: none; /* Firefox */
+        }
+        .main-content::-webkit-scrollbar { display: none; /* Chrome/Safari */ }
+        
+        .top-bar { margin-bottom: 20px; }
+        .city-header h2 { font-size: 2.8rem; font-weight: 300; margin-bottom: 0px; line-height: 1.1; }
+        .city-header p { color: var(--text-secondary); font-size: 0.95rem; }
+
+        .weather-hero { display: flex; align-items: center; gap: 25px; margin-bottom: 25px; }
+        .big-temp { font-size: 5rem; font-weight: 200; line-height: 1; }
+        .weather-icon { font-size: 3.5rem; }
+        .weather-desc { font-size: 1.2rem; color: var(--text-secondary); text-transform: capitalize; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
+        .stat-card { background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 15px; border-radius: 16px; display: flex; flex-direction: column; gap: 5px; }
+        .stat-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; }
+        .stat-value { font-size: 1.3rem; font-weight: 600; }
+        .stat-sub { font-size: 0.75rem; opacity: 0.7; }
+
+        /* CHART SECTION */
+        .chart-container { 
+            flex: 1; /* Take remaining space */
+            min-height: 200px; 
+            border-top: 1px solid var(--glass-border); 
+            padding-top: 15px;
+            display: flex; flex-direction: column;
+        }
+        .chart-title { font-size: 1rem; margin-bottom: 10px; color: var(--text-secondary); }
+        .chart-wrapper { flex: 1; position: relative; width: 100%; } /* Wrapper to control canvas size */
+        canvas { width: 100% !important; height: 100% !important; }
+
+        .hidden { display: none !important; }
+        #jsonDisplay { display: none; }
+
+        @media (max-width: 900px) {
+            .dashboard-container { grid-template-columns: 1fr; height: auto; max-height: none; overflow-y: auto; }
+            .sidebar { border-right: none; border-bottom: 1px solid var(--glass-border); height: auto; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .chart-container { height: 300px; }
+        }
     </style>
 </head>
 <body>
-    <h1>City Life Monitor 🏙️</h1>
-    
-    <div id="auth-section">
-        <a href="/auth/google"><button>Login with Google</button></a>
-    </div>
-    <div id="user-section" class="hidden">
-        <p>Welcome, <span id="username"></span>!</p>
-    </div>
+    <div class="bg-image" id="bgImage"></div>
+    <div class="overlay"></div>
 
-    <hr>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div>
+                <div class="app-title">WeatherWise UI</div>
+                <div id="auth-section">
+                    <a href="/auth/google" style="text-decoration: none;"><button class="btn btn-secondary">Sign In with Google</button></a>
+                </div>
+                <div id="user-section" class="hidden">
+                    <div class="user-welcome">Hello, <span id="username">User</span></div>
+                </div>
+            </div>
 
-    <div>
-        <input type="text" id="cityInput" placeholder="Enter City Name (e.g., London)" />
-        <button onclick="fetchCityData()">Analyze City</button>
-    </div>
+            <div>
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="cityInput" placeholder="Search city..." onkeypress="handleEnter(event)">
+                </div>
+                <button class="btn" onclick="fetchCityData()">Analyze Location</button>
+            </div>
 
-    <div id="results" class="hidden">
-        <h2>Aggregated Data</h2>
-        <pre id="jsonDisplay" style="background: #f4f4f4; padding: 10px;"></pre>
-        <button onclick="sendToBackend()">Save to Database</button>
-        <p id="statusMsg"></p>
+            <div class="location-preview">
+                <span class="mini-map-icon">🌍</span>
+                <p style="font-size: 0.9rem; color:#aaa;">Global Monitoring System</p>
+                <button class="btn btn-secondary" onclick="sendToBackend()">Save Current Data</button>
+                <button class="btn" style="background: #4a90e2; color: white;" onclick="fetchHistory()">Show History Graph</button>
+                <p id="statusMsg" style="margin-top: 10px; font-size: 0.8rem; color: #4ade80; min-height: 20px;"></p>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div id="results" class="hidden">
+                <div class="top-bar">
+                    <div class="city-header">
+                        <h2 id="ui-city">New York</h2>
+                        <p><span id="ui-country">US</span> • <span id="ui-date">Friday, Jan 4</span></p>
+                    </div>
+                </div>
+
+                <div class="weather-hero">
+                    <div class="big-temp"><span id="ui-temp">--</span>°</div>
+                    <div>
+                        <div class="weather-icon" id="ui-icon">☁️</div>
+                        <div class="weather-desc" id="ui-condition">Cloudy</div>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-label">Humidity</span>
+                        <div class="stat-value"><span id="ui-humidity">--</span>%</div>
+                        <div class="stat-sub">Water Vapor</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Air Quality</span>
+                        <div class="stat-value">AQI <span id="ui-aqi">--</span></div>
+                        <div class="stat-sub" id="ui-pollutant">PM2.5: --</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Population</span>
+                        <div class="stat-value" id="ui-population">--</div>
+                        <div class="stat-sub">Elevation: <span id="ui-elevation">--</span></div>
+                    </div>
+                </div>
+
+                <!-- CHART SECTION (Hidden initially) -->
+                <div id="chart-section" class="chart-container hidden">
+                    <div class="chart-title">Historical Temperature Trends</div>
+                    <div class="chart-wrapper">
+                        <canvas id="historyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <pre id="jsonDisplay"></pre>
+        </main>
     </div>
 
     <script src="script.js"></script>
+    <script>
+        function handleEnter(e) { if(e.key === 'Enter') fetchCityData(); }
+        const dateEl = document.getElementById('ui-date');
+        const options = { weekday: 'long', month: 'short', day: 'numeric' };
+        dateEl.innerText = new Date().toLocaleDateString('en-US', options);
+
+        function updateBackground(condition) {
+            const bg = document.getElementById('bgImage');
+            if(!bg) return;
+            condition = condition ? condition.toLowerCase() : '';
+            if(condition.includes('rain')) bg.style.backgroundImage = "url('https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?q=80&w=2544')";
+            else if(condition.includes('clear')) bg.style.backgroundImage = "url('https://images.unsplash.com/photo-1506748686214-e9df14d4d9d0?q=80&w=2544')";
+            else if(condition.includes('cloud')) bg.style.backgroundImage = "url('https://images.unsplash.com/photo-1534088568595-a066f410bcda?q=80&w=2551')";
+            else if(condition.includes('snow')) bg.style.backgroundImage = "url('https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?q=80&w=2549')";
+        }
+    </script>
 </body>
 </html>
