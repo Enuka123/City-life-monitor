@@ -5,6 +5,7 @@ const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const cors = require('cors');
+const path = require('path'); // Required for serving the index.html on Vercel
 const CityData = require('./models/CityData');
 
 const app = express();
@@ -24,7 +25,7 @@ app.use(session({ secret: process.env.SESSION_SECRET, resave: false, saveUniniti
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Dynamic Callback URL logic for Vercel, Render, or Localhost
+// Dynamic Callback URL Logic (Works for Localhost, Render, and Vercel)
 let baseUrl = "http://localhost:3000";
 if (process.env.VERCEL_URL) {
     baseUrl = `https://${process.env.VERCEL_URL}`;
@@ -55,16 +56,22 @@ const checkApiKey = (req, res, next) => {
   }
 };
 
-// --- 5. PROXY ROUTE: WEATHER ---
+// --- 5. ROOT ROUTE (Fixes "Cannot GET /" on Vercel) ---
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// --- 6. PROXY ROUTE: WEATHER ---
 const WEATHER_API_URL = 'https://api.openweathermap.org/data/2.5/weather';
 app.get('/api/weather-proxy', async (req, res) => {
     const { city } = req.query;
     if (!city) return res.status(400).json({ error: 'City name required.' });
-    // Use server-side key
+    
+    // Server-side API Key usage
     const url = `${WEATHER_API_URL}?q=${city}&appid=${process.env.WEATHER_API_KEY}&units=metric`;
     try {
         const weatherRes = await fetch(url);
-        if (!weatherRes.ok) return res.status(weatherRes.status).json({ error: 'Failed to fetch Weather' });
+        if (!weatherRes.ok) return res.status(weatherRes.status).json({ error: 'Failed to fetch Weather data' });
         const weatherData = await weatherRes.json();
         res.json(weatherData);
     } catch (error) {
@@ -73,14 +80,14 @@ app.get('/api/weather-proxy', async (req, res) => {
     }
 });
 
-// --- 6. PROXY ROUTE: AIR QUALITY ---
+// --- 7. PROXY ROUTE: AIR QUALITY ---
 const AIR_QUALITY_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 app.get('/api/openaq-proxy', async (req, res) => {
     const { lat, lon } = req.query; 
     const url = `${AIR_QUALITY_URL}?latitude=${lat}&longitude=${lon}&current=us_aqi,pm2_5`;
     try {
         const aqRes = await fetch(url);
-        if (!aqRes.ok) return res.status(aqRes.status).json({ error: 'Failed to fetch AQI' });
+        if (!aqRes.ok) return res.status(aqRes.status).json({ error: 'Failed to fetch AQI data' });
         const aqData = await aqRes.json();
         res.json(aqData);
     } catch (error) {
@@ -89,7 +96,7 @@ app.get('/api/openaq-proxy', async (req, res) => {
     }
 });
 
-// --- 7. PROXY ROUTE: DEMOGRAPHICS ---
+// --- 8. PROXY ROUTE: DEMOGRAPHICS ---
 const GEODB_API_URL = 'https://wft-geo-db.p.rapidapi.com/v1/geo/cities';
 app.get('/api/geodb-proxy', async (req, res) => {
     const { city, countryCode } = req.query;
@@ -99,7 +106,7 @@ app.get('/api/geodb-proxy', async (req, res) => {
             method: 'GET',
             headers: { 'X-RapidAPI-Key': process.env.GEODB_API_KEY, 'X-RapidAPI-Host': 'wft-geo-db.p.rapidapi.com' }
         });
-        if (!geoDbRes.ok) return res.status(geoDbRes.status).json({ error: 'Failed to fetch GeoDB' });
+        if (!geoDbRes.ok) return res.status(geoDbRes.status).json({ error: 'Failed to fetch GeoDB data' });
         const geoDbData = await geoDbRes.json();
         res.json(geoDbData);
     } catch (error) {
@@ -108,7 +115,7 @@ app.get('/api/geodb-proxy', async (req, res) => {
     }
 });
 
-// --- 8. HISTORICAL DATA ENDPOINT (SECURED) ---
+// --- 9. HISTORICAL DATA ENDPOINT (SECURED) ---
 app.get('/api/history', async (req, res) => {
     if (!req.user) {
         return res.status(401).json({ error: 'Unauthorized. Please log in.' });
@@ -132,7 +139,7 @@ app.get('/api/history', async (req, res) => {
     }
 });
 
-// --- 9. AUTH ROUTES ---
+// --- 10. AUTH ROUTES ---
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile'] }));
 app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/' }), (req, res) => res.redirect('/'));
 app.get('/current-user', (req, res) => res.json(req.user || null));
