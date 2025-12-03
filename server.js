@@ -5,14 +5,15 @@ const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const cors = require('cors');
-const path = require('path'); // Required for serving the index.html on Vercel
+const path = require('path'); // Standard Node.js module for file paths
 const CityData = require('./models/CityData');
 
 const app = express();
 
-// --- 1. CORE MIDDLEWARE ---
+// --- 1. CORE MIDDLEWARE (FIXED STATIC PATH) ---
 app.use(express.json());
-app.use(express.static('public'));
+// FIX: Use path.join to ensure Vercel can find the 'public' folder
+app.use(express.static(path.join(__dirname, 'public'))); 
 app.use(cors());
 
 // --- 2. DATABASE CONNECTION ---
@@ -25,7 +26,7 @@ app.use(session({ secret: process.env.SESSION_SECRET, resave: false, saveUniniti
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Dynamic Callback URL Logic (Works for Localhost, Render, and Vercel)
+// Dynamic Callback URL Logic
 let baseUrl = "http://localhost:3000";
 if (process.env.VERCEL_URL) {
     baseUrl = `https://${process.env.VERCEL_URL}`;
@@ -56,7 +57,7 @@ const checkApiKey = (req, res, next) => {
   }
 };
 
-// --- 5. ROOT ROUTE (Fixes "Cannot GET /" on Vercel) ---
+// --- 5. ROOT ROUTE ---
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -67,7 +68,6 @@ app.get('/api/weather-proxy', async (req, res) => {
     const { city } = req.query;
     if (!city) return res.status(400).json({ error: 'City name required.' });
     
-    // Server-side API Key usage
     const url = `${WEATHER_API_URL}?q=${city}&appid=${process.env.WEATHER_API_KEY}&units=metric`;
     try {
         const weatherRes = await fetch(url);
