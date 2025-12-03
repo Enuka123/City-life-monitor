@@ -5,14 +5,14 @@ const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const cors = require('cors');
-const path = require('path'); // Standard Node.js module for file paths
+const path = require('path');
 const CityData = require('./models/CityData');
 
 const app = express();
 
-// --- 1. CORE MIDDLEWARE (FIXED STATIC PATH) ---
+// --- 1. CORE MIDDLEWARE ---
 app.use(express.json());
-// FIX: Use path.join to ensure Vercel can find the 'public' folder
+// Ensure Vercel finds the public folder
 app.use(express.static(path.join(__dirname, 'public'))); 
 app.use(cors());
 
@@ -26,12 +26,21 @@ app.use(session({ secret: process.env.SESSION_SECRET, resave: false, saveUniniti
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Dynamic Callback URL Logic
-let baseUrl = "http://localhost:3000";
-if (process.env.VERCEL_URL) {
-    baseUrl = `https://${process.env.VERCEL_URL}`;
-} else if (process.env.RENDER_EXTERNAL_URL) {
-    baseUrl = process.env.RENDER_EXTERNAL_URL;
+// --- DYNAMIC CALLBACK URL LOGIC (FIXED) ---
+// Priority 1: Use the explicit BASE_URL from environment variables (Best for Vercel Production)
+// Priority 2: Use Render's automatic URL
+// Priority 3: Use Vercel's automatic URL (Fallback for previews)
+// Priority 4: Localhost
+let baseUrl = process.env.BASE_URL;
+
+if (!baseUrl) {
+    if (process.env.RENDER_EXTERNAL_URL) {
+        baseUrl = process.env.RENDER_EXTERNAL_URL;
+    } else if (process.env.VERCEL_URL) {
+        baseUrl = `https://${process.env.VERCEL_URL}`;
+    } else {
+        baseUrl = "http://localhost:3000";
+    }
 }
 
 passport.use(new GoogleStrategy({
@@ -62,41 +71,36 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// --- 6. PROXY ROUTE: WEATHER ---
+// --- 6. PROXY ROUTES ---
 const WEATHER_API_URL = 'https://api.openweathermap.org/data/2.5/weather';
 app.get('/api/weather-proxy', async (req, res) => {
     const { city } = req.query;
     if (!city) return res.status(400).json({ error: 'City name required.' });
-    
     const url = `${WEATHER_API_URL}?q=${city}&appid=${process.env.WEATHER_API_KEY}&units=metric`;
     try {
         const weatherRes = await fetch(url);
-        if (!weatherRes.ok) return res.status(weatherRes.status).json({ error: 'Failed to fetch Weather data' });
+        if (!weatherRes.ok) return res.status(weatherRes.status).json({ error: 'Failed to fetch Weather' });
         const weatherData = await weatherRes.json();
         res.json(weatherData);
     } catch (error) {
-        console.error(error);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
-// --- 7. PROXY ROUTE: AIR QUALITY ---
 const AIR_QUALITY_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 app.get('/api/openaq-proxy', async (req, res) => {
     const { lat, lon } = req.query; 
     const url = `${AIR_QUALITY_URL}?latitude=${lat}&longitude=${lon}&current=us_aqi,pm2_5`;
     try {
         const aqRes = await fetch(url);
-        if (!aqRes.ok) return res.status(aqRes.status).json({ error: 'Failed to fetch AQI data' });
+        if (!aqRes.ok) return res.status(aqRes.status).json({ error: 'Failed to fetch AQI' });
         const aqData = await aqRes.json();
         res.json(aqData);
     } catch (error) {
-        console.error(error);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
-// --- 8. PROXY ROUTE: DEMOGRAPHICS ---
 const GEODB_API_URL = 'https://wft-geo-db.p.rapidapi.com/v1/geo/cities';
 app.get('/api/geodb-proxy', async (req, res) => {
     const { city, countryCode } = req.query;
@@ -106,21 +110,17 @@ app.get('/api/geodb-proxy', async (req, res) => {
             method: 'GET',
             headers: { 'X-RapidAPI-Key': process.env.GEODB_API_KEY, 'X-RapidAPI-Host': 'wft-geo-db.p.rapidapi.com' }
         });
-        if (!geoDbRes.ok) return res.status(geoDbRes.status).json({ error: 'Failed to fetch GeoDB data' });
+        if (!geoDbRes.ok) return res.status(geoDbRes.status).json({ error: 'Failed to fetch GeoDB' });
         const geoDbData = await geoDbRes.json();
         res.json(geoDbData);
     } catch (error) {
-        console.error(error);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
-// --- 9. HISTORICAL DATA ENDPOINT (SECURED) ---
+// --- 8. HISTORICAL DATA ENDPOINT ---
 app.get('/api/history', async (req, res) => {
-    if (!req.user) {
-        return res.status(401).json({ error: 'Unauthorized. Please log in.' });
-    }
-
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized. Please log in.' });
     const { city } = req.query;
     if (!city) return res.status(400).json({ error: 'City name required' });
 
@@ -131,32 +131,27 @@ app.get('/api/history', async (req, res) => {
         })
         .sort({ timestamp: 1 })
         .select('timestamp weather.temp airQuality.aqi'); 
-        
         res.json(history);
     } catch (err) {
-        console.error(err);
         res.status(500).json({ error: 'Database query failed' });
     }
 });
 
-// --- 10. AUTH ROUTES ---
+// --- 9. AUTH ROUTES ---
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile'] }));
 app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/' }), (req, res) => res.redirect('/'));
 app.get('/current-user', (req, res) => res.json(req.user || null));
 
-// LOGOUT ROUTE
 app.get('/auth/logout', (req, res, next) => {
     req.logout((err) => {
         if (err) { return next(err); }
         req.session.destroy((err) => {
-            if (err) console.error("Error destroying session:", err);
             res.clearCookie('connect.sid');
             res.redirect('/');
         });
     });
 });
 
-// SAVE DATA ROUTE
 app.post('/api/save-city-data', checkApiKey, async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
   try {
