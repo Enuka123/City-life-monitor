@@ -24,10 +24,15 @@ app.use(session({ secret: process.env.SESSION_SECRET, resave: false, saveUniniti
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Dynamic Callback URL for Production vs Local
+const CALLBACK_URL = process.env.RENDER_EXTERNAL_URL 
+    ? `${process.env.RENDER_EXTERNAL_URL}/auth/google/callback` 
+    : "http://localhost:3000/auth/google/callback";
+
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "http://localhost:3000/auth/google/callback"
+    callbackURL: CALLBACK_URL
   },
   (accessToken, refreshToken, profile, done) => {
     return done(null, profile);
@@ -99,16 +104,23 @@ app.get('/api/geodb-proxy', async (req, res) => {
     }
 });
 
-// --- NEW: HISTORICAL DATA ENDPOINT ---
+// --- 8. HISTORICAL DATA ENDPOINT (SECURED) ---
 app.get('/api/history', async (req, res) => {
+    if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized. Please log in.' });
+    }
+
     const { city } = req.query;
     if (!city) return res.status(400).json({ error: 'City name required' });
 
     try {
-        // Find records for this city, sorted by oldest -> newest
-        const history = await CityData.find({ cityName: new RegExp(`^${city}$`, 'i') })
-                                      .sort({ timestamp: 1 })
-                                      .select('timestamp weather.temp airQuality.aqi'); 
+        const history = await CityData.find({ 
+            cityName: new RegExp(`^${city}$`, 'i'),
+            user: req.user.displayName 
+        })
+        .sort({ timestamp: 1 })
+        .select('timestamp weather.temp airQuality.aqi'); 
+        
         res.json(history);
     } catch (err) {
         console.error(err);
@@ -116,11 +128,24 @@ app.get('/api/history', async (req, res) => {
     }
 });
 
-// --- 8. AUTH & SAVE ROUTES ---
+// --- 9. AUTH ROUTES ---
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile'] }));
 app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/' }), (req, res) => res.redirect('/'));
 app.get('/current-user', (req, res) => res.json(req.user || null));
 
+// LOGOUT ROUTE
+app.get('/auth/logout', (req, res, next) => {
+    req.logout((err) => {
+        if (err) { return next(err); }
+        req.session.destroy((err) => {
+            if (err) console.error("Error destroying session:", err);
+            res.clearCookie('connect.sid');
+            res.redirect('/');
+        });
+    });
+});
+
+// SAVE DATA ROUTE
 app.post('/api/save-city-data', checkApiKey, async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
   try {

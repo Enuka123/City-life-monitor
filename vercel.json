@@ -1,0 +1,91 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "server.js"
+    }
+  ]
+}
+```
+
+**What this does:**
+* `"builds"`: Tells Vercel to compile `server.js` using its Node.js environment.
+* `"routes"`: Tells Vercel that *any* URL (e.g., `/`, `/api/weather-proxy`, `/auth/google`) should be handled by your `server.js` file.
+
+### Step 2: Push Your Code to GitHub
+
+Make sure your latest code (including the new `vercel.json` file) is pushed to your GitHub repository.
+
+```bash
+git add .
+git commit -m "Add vercel config"
+git push
+```
+
+### Step 3: Deploy on Vercel Dashboard
+
+1.  **Sign Up/Login:** Go to [vercel.com](https://vercel.com/) and log in with your GitHub account.
+2.  **Add New Project:** Click the **"Add New..."** button and select **"Project"**.
+3.  **Import Git Repository:** Find your `city-life-monitor` repository in the list and click **"Import"**.
+4.  **Configure Project:**
+    * **Project Name:** Use the default or give it a custom name.
+    * **Framework Preset:** Select **"Other"** (since it's a custom Express app, not Next.js or React).
+    * **Root Directory:** Leave as `./` (default).
+5.  **Environment Variables (CRITICAL):**
+    Expand the **"Environment Variables"** section. You must add all the keys from your local `.env` file here.
+
+    | Key | Value (Copy from your local .env) |
+    | :--- | :--- |
+    | `MONGO_URI` | `mongodb+srv://...` |
+    | `SESSION_SECRET` | `your_long_random_string` |
+    | `APP_API_KEY` | `MyStrongSecretKey_SoC_2025_Group18` |
+    | `GOOGLE_CLIENT_ID` | `67260...` |
+    | `GOOGLE_CLIENT_SECRET` | `GOCSPX...` |
+    | `WEATHER_API_KEY` | `your_new_weather_key` |
+    | `GEODB_API_KEY` | `7a23b...` |
+
+    *Note: Render creates a `RENDER_EXTERNAL_URL` variable automatically. Vercel creates a `VERCEL_URL` variable automatically, but it doesn't include the `https://` prefix. We might need to tweak `server.js` slightly if you encounter redirect issues, but try deploying first.*
+
+6.  Click **"Deploy"**.
+
+### Step 4: Update Google Cloud Console (Post-Deployment)
+
+Once the deployment finishes, Vercel will give you a live URL (e.g., `https://city-life-monitor.vercel.app`).
+
+1.  Go to **Google Cloud Console** > **APIs & Services** > **Credentials**.
+2.  Click your **OAuth 2.0 Client ID**.
+3.  Add the new callback URL:
+    * `https://city-life-monitor.vercel.app/auth/google/callback`
+4.  Click **Save**.
+
+### ⚠️ Important Note for Vercel Users
+
+Vercel functions are **serverless**, meaning they spin up when requested and spin down when idle. This has two implications:
+1.  **Cold Starts:** The first request might take a second or two longer.
+2.  **Websockets/Long Polling:** Standard Vercel deployments don't support persistent connections (like Socket.io) easily, but your project (API + MongoDB) works perfectly fine with this model.
+
+### Optional: Tweak `server.js` for Vercel URL
+
+If Google OAuth redirects you to a broken URL (e.g., `vercel.app` without `https://`), you might need to update your callback logic in `server.js` to handle Vercel's specific environment variable.
+
+In `server.js`, locate the `CALLBACK_URL` definition and update it:
+
+```javascript
+// Updated Logic for Vercel
+let baseUrl = "http://localhost:3000";
+
+if (process.env.VERCEL_URL) {
+    // Vercel omits 'https://', so we add it manually
+    baseUrl = `https://${process.env.VERCEL_URL}`;
+} else if (process.env.RENDER_EXTERNAL_URL) {
+    baseUrl = process.env.RENDER_EXTERNAL_URL;
+}
+
+const CALLBACK_URL = `${baseUrl}/auth/google/callback`;
