@@ -14,11 +14,10 @@ const CityDataSchema = new mongoose.Schema({
     pollutant: String
   },
   demographics: {
-    // Changed from Number to String so they can accept "N/A"
     population: String, 
-    //elevation: String
+    elevation: String
   },
-  user: String // Stores which user saved this data (OAuth)
+  user: String // Stores the user ID who saved this
 });
 
 module.exports = mongoose.model('CityData', CityDataSchema);

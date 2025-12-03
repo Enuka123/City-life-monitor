@@ -24,15 +24,18 @@ app.use(session({ secret: process.env.SESSION_SECRET, resave: false, saveUniniti
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Dynamic Callback URL for Production vs Local
-const CALLBACK_URL = process.env.RENDER_EXTERNAL_URL 
-    ? `${process.env.RENDER_EXTERNAL_URL}/auth/google/callback` 
-    : "http://localhost:3000/auth/google/callback";
+// Dynamic Callback URL logic for Vercel, Render, or Localhost
+let baseUrl = "http://localhost:3000";
+if (process.env.VERCEL_URL) {
+    baseUrl = `https://${process.env.VERCEL_URL}`;
+} else if (process.env.RENDER_EXTERNAL_URL) {
+    baseUrl = process.env.RENDER_EXTERNAL_URL;
+}
 
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: CALLBACK_URL
+    callbackURL: `${baseUrl}/auth/google/callback`
   },
   (accessToken, refreshToken, profile, done) => {
     return done(null, profile);
@@ -57,6 +60,7 @@ const WEATHER_API_URL = 'https://api.openweathermap.org/data/2.5/weather';
 app.get('/api/weather-proxy', async (req, res) => {
     const { city } = req.query;
     if (!city) return res.status(400).json({ error: 'City name required.' });
+    // Use server-side key
     const url = `${WEATHER_API_URL}?q=${city}&appid=${process.env.WEATHER_API_KEY}&units=metric`;
     try {
         const weatherRes = await fetch(url);
