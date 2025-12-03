@@ -26,9 +26,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            /* Allow body scroll on very small screens if needed */
-            overflow-x: hidden; 
-            padding: 20px; /* Add padding to body to prevent edge touching */
+            overflow: hidden; 
         }
 
         .bg-image {
@@ -44,19 +42,16 @@
         }
 
         .dashboard-container {
-            width: 100%; max-width: 1200px;
-            /* Use min-height instead of fixed height for flexibility */
-            min-height: 600px; 
-            /* Cap height only on large screens */
+            width: 95%; max-width: 1200px;
             height: 85vh; 
-            max-height: 800px;
-            
+            min-height: 600px;
+            max-height: 780px; 
             background: rgba(20, 20, 20, 0.6);
             backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
             border: 1px solid var(--glass-border); border-radius: 30px;
             box-shadow: var(--card-shadow);
             display: grid; grid-template-columns: 320px 1fr;
-            overflow: hidden; /* Keep rounded corners clean */
+            overflow: hidden; 
         }
 
         /* SIDEBAR */
@@ -65,7 +60,7 @@
             border-right: 1px solid var(--glass-border); 
             padding: 30px; 
             height: 100%;
-            overflow-y: auto; /* Allow sidebar scrolling if content is too tall */
+            overflow-y: auto; 
         }
         .app-title { font-size: 1.4rem; font-weight: 700; margin-bottom: 5px; background: linear-gradient(to right, #fff, #aaa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .user-welcome { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 10px; }
@@ -79,6 +74,8 @@
         .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255,255,255,0.1); }
         .btn-secondary { background: var(--glass-bg); color: white; border: 1px solid var(--glass-border); }
         .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+        .btn-logout { background: #ff4d4d; color: white; border: none; padding: 8px 12px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; transition: 0.3s; margin-top: 10px; width: auto; display: inline-block;}
+        .btn-logout:hover { background: #cc0000; }
 
         .location-preview { margin-top: auto; background: var(--glass-bg); border-radius: 20px; padding: 20px; text-align: center; }
         .mini-map-icon { font-size: 2.5rem; margin-bottom: 5px; display: block; opacity: 0.8; }
@@ -86,28 +83,27 @@
         /* MAIN CONTENT */
         .main-content { 
             display: flex; flex-direction: column; 
-            padding: 30px 40px; 
+            padding: 25px 35px; 
             height: 100%;
-            overflow-y: auto; /* Enable vertical scrolling for main content */
-            scrollbar-width: thin; /* Make scrollbar thinner on Firefox */
-            scrollbar-color: rgba(255,255,255,0.2) transparent; /* Custom scrollbar colors */
+            overflow-y: auto; 
+            scrollbar-width: thin; 
+            scrollbar-color: rgba(255,255,255,0.2) transparent; 
         }
         
-        /* Custom Scrollbar for Chrome/Safari/Edge */
         .main-content::-webkit-scrollbar { width: 6px; }
         .main-content::-webkit-scrollbar-track { background: transparent; }
         .main-content::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.2); border-radius: 20px; }
 
-        .top-bar { margin-bottom: 20px; }
+        .top-bar { margin-bottom: 15px; }
         .city-header h2 { font-size: 2.8rem; font-weight: 300; margin-bottom: 0px; line-height: 1.1; }
         .city-header p { color: var(--text-secondary); font-size: 0.95rem; }
 
-        .weather-hero { display: flex; align-items: center; gap: 25px; margin-bottom: 25px; flex-wrap: wrap; } /* Wrap content on small screens */
+        .weather-hero { display: flex; align-items: center; gap: 25px; margin-bottom: 20px; flex-wrap: wrap; }
         .big-temp { font-size: 5rem; font-weight: 200; line-height: 1; }
         .weather-icon { font-size: 3.5rem; }
         .weather-desc { font-size: 1.2rem; color: var(--text-secondary); text-transform: capitalize; }
 
-        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
         .stat-card { background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 15px; border-radius: 16px; display: flex; flex-direction: column; gap: 5px; }
         .stat-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; }
         .stat-value { font-size: 1.3rem; font-weight: 600; }
@@ -115,28 +111,26 @@
 
         /* CHART SECTION */
         .chart-container { 
-            /* Let chart take space but shrink if needed */
             flex: 1; 
-            min-height: 250px; 
+            min-height: 220px; 
             border-top: 1px solid var(--glass-border); 
             padding-top: 15px;
             display: flex; flex-direction: column;
         }
         .chart-title { font-size: 1rem; margin-bottom: 10px; color: var(--text-secondary); }
-        .chart-wrapper { flex: 1; position: relative; width: 100%; min-height: 200px; }
+        .chart-wrapper { flex: 1; position: relative; width: 100%; min-height: 180px; }
         canvas { width: 100% !important; height: 100% !important; }
 
         .hidden { display: none !important; }
         #jsonDisplay { display: none; }
 
-        /* Responsive Breakpoint */
         @media (max-width: 900px) {
-            body { padding: 10px; height: auto; display: block; overflow-y: auto; } /* Allow full page scroll on mobile */
+            body { padding: 10px; height: auto; display: block; overflow-y: auto; } 
             .dashboard-container { 
                 grid-template-columns: 1fr; 
                 height: auto; 
-                max-height: none; /* Remove height cap on mobile */
-                overflow: visible; /* Show all content */
+                max-height: none; 
+                overflow: visible; 
                 display: flex;
                 flex-direction: column;
             }
@@ -151,7 +145,7 @@
                 overflow: visible;
                 padding: 20px;
             }
-            .stats-grid { grid-template-columns: 1fr; } /* Stack cards */
+            .stats-grid { grid-template-columns: 1fr; } 
             .weather-hero { justify-content: flex-start; }
             .chart-container { height: 300px; }
         }
@@ -170,6 +164,7 @@
                 </div>
                 <div id="user-section" class="hidden">
                     <div class="user-welcome">Hello, <span id="username">User</span></div>
+                    <button class="btn-logout" onclick="logout()">Logout</button>
                 </div>
             </div>
 
@@ -185,7 +180,6 @@
                 <span class="mini-map-icon">🌍</span>
                 <p style="font-size: 0.9rem; color:#aaa;">Global Monitoring System</p>
                 <button class="btn btn-secondary" onclick="sendToBackend()">Save Current Data</button>
-                <button class="btn" style="background: #4a90e2; color: white;" onclick="fetchHistory()">Show History Graph</button>
                 <p id="statusMsg" style="margin-top: 10px; font-size: 0.8rem; color: #4ade80; min-height: 20px;"></p>
             </div>
         </aside>
